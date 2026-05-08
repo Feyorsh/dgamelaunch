@@ -505,10 +505,30 @@ play_game_by_id(const char *game_id, struct dg_user *me)
 
 		/* fix the variables in the arguments */
 		for (i = 0; i < myconfig[userchoice]->num_args; i++) {
+            if (!strcmp(myconfig[userchoice]->bin_args[i], "-wlisp")) wants_lisp = 1;
 		    tmpstr = dgl_format_str(userchoice, me, myconfig[userchoice]->bin_args[i], NULL);
 		    free(myconfig[userchoice]->bin_args[i]);
 		    myconfig[userchoice]->bin_args[i] = tmpstr;
 		}
+
+        if (wants_lisp) {
+            // actually check if the game we're launching has lisp support
+            wants_lisp = 0;
+            FILE *fp = popen(strcat(myconfig[userchoice]->bin_args[0], " -wlisp"), "r");
+            if (fp == NULL) {
+                perror("popen failed");
+            } else {
+                char buffer[1024];
+                while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+                    if (strstr(buffer, "nethack-nhapi-init-nhwindows")) {
+                        wants_lisp = 1;
+                        break;
+                    }
+                }
+            }
+
+            pclose(fp);
+        }
 
 		signal(SIGWINCH, SIG_DFL);
 		signal(SIGINT, SIG_DFL);
@@ -519,7 +539,7 @@ play_game_by_id(const char *game_id, struct dg_user *me)
 		/* launch program */
 		ttyrec_main(userchoice, me->username,
 			    ttrecdir = dgl_format_str(userchoice, me, myconfig[userchoice]->ttyrecdir, NULL),
-			    gen_ttyrec_filename());
+			    gen_ttyrec_filename(), wants_lisp);
 		idle_alarm_set_enabled(1);
 		if (ttrecdir) free(ttrecdir);
 		/* lastly, run the generic "do these when a game is left" commands */
